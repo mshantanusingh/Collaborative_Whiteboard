@@ -87,7 +87,7 @@ export default function Whiteboard() {
         id: e.target.id,
         obj: e.target.toObject([
           'left', 'top', 'width', 'height',
-          'radius', 'fill', 'stroke', 'strokeWidth'
+          'radius', 'fill', 'stroke', 'strokeWidth', 'text'
         ])
       };
       socket.emit('add-object', payload);
@@ -100,7 +100,7 @@ export default function Whiteboard() {
         id: e.target.id,
         obj: e.target.toObject([
           'left', 'top', 'width', 'height',
-          'radius', 'fill', 'stroke', 'strokeWidth'
+          'radius', 'fill', 'stroke', 'strokeWidth', 'text'
         ])
       });
     };
@@ -111,14 +111,43 @@ export default function Whiteboard() {
       socket.emit('remove-object', { id: e.target.id });
     };
 
+    // FIXED: Add text editing event handlers for real-time sync
+    const handleTextChanged = (e) => {
+      if (!e.target || e.target.noEmit) return;
+      socket.emit('modify-object', {
+        id: e.target.id,
+        obj: e.target.toObject([
+          'left', 'top', 'width', 'height',
+          'radius', 'fill', 'stroke', 'strokeWidth', 'text'
+        ])
+      });
+    };
+
+    const handleTextEditingExited = (e) => {
+      if (!e.target || e.target.noEmit) return;
+      socket.emit('modify-object', {
+        id: e.target.id,
+        obj: e.target.toObject([
+          'left', 'top', 'width', 'height',
+          'radius', 'fill', 'stroke', 'strokeWidth', 'text'
+        ])
+      });
+    };
+
     canvas.on('object:added', handleAdd);
     canvas.on('object:modified', handleModify);
     canvas.on('object:removed', handleRemove);
+    
+    // FIXED: Add text editing event listeners
+    canvas.on('text:changed', handleTextChanged);
+    canvas.on('text:editing:exited', handleTextEditingExited);
 
     return () => {
       canvas.off('object:added', handleAdd);
       canvas.off('object:modified', handleModify);
       canvas.off('object:removed', handleRemove);
+      canvas.off('text:changed', handleTextChanged);
+      canvas.off('text:editing:exited', handleTextEditingExited);
     };
   }, []);
 
@@ -214,7 +243,7 @@ export default function Whiteboard() {
           };
           currentShapeRef.current.set(newProps);
           
-          // FIXED: Emit real-time updates during drawing
+          // Emit real-time updates during drawing
           socket.emit('modify-object', {
             id: currentShapeRef.current.id,
             obj: currentShapeRef.current.toObject([
@@ -234,7 +263,7 @@ export default function Whiteboard() {
           };
           currentShapeRef.current.set(newProps);
           
-          // FIXED: Emit real-time updates during drawing
+          // Emit real-time updates during drawing
           socket.emit('modify-object', {
             id: currentShapeRef.current.id,
             obj: currentShapeRef.current.toObject([
