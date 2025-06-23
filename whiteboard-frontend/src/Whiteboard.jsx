@@ -1,85 +1,101 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { io } from 'socket.io-client';
+import React, { useRef, useEffect, useState } from 'react';
+import io from 'socket.io-client';
+import './WhiteboardApp.css';
 
-// Initialize Socket.IO client
-const socket = io('http://localhost:4000');
-
-export default function Whiteboard() {
+const WhiteboardApp = () => {
   const canvasRef = useRef(null);
   const fabricCanvasRef = useRef(null);
-  const [tool, setTool] = useState('pen');
-  const [color, setColor] = useState('#000000');
-  const [lineWidth, setLineWidth] = useState(3);
+  const socketRef = useRef(null);
   const nextIdRef = useRef(1);
   const isDrawingRef = useRef(false);
-  const startPointRef = useRef(null);
-  const currentShapeRef = useRef(null);
+  const currentPathRef = useRef(null);
 
-  // Initialize Fabric.js canvas and socket listeners
+  const [selectedTool, setSelectedTool] = useState('pen');
+  const [strokeColor, setStrokeColor] = useState('#000000');
+  const [strokeWidth, setStrokeWidth] = useState(2);
+  const [fillColor, setFillColor] = useState('#ffffff');
+
+  // Initialize canvas and socket
   useEffect(() => {
-    const fabric = window.fabric;
-    if (!fabric || !canvasRef.current) return;
+    // Wait for fabric to be available globally
+    if (typeof window.fabric === 'undefined') {
+      console.error('Fabric.js not loaded');
+      return;
+    }
 
-    const canvas = new fabric.Canvas(canvasRef.current, {
+    // Initialize Fabric canvas using global fabric object
+    const canvas = new window.fabric.Canvas(canvasRef.current, {
       width: 800,
       height: 600,
-      backgroundColor: '#fff',
-      selection: true,
+      backgroundColor: 'white'
     });
     fabricCanvasRef.current = canvas;
 
-    // Initial free-draw setup
-    canvas.isDrawingMode = true;
-    const brush = new fabric.PencilBrush(canvas);
-    brush.color = color;
-    brush.width = lineWidth;
-    canvas.freeDrawingBrush = brush;
+    // Initialize socket connection
+    const socket = io('http://localhost:4000');
+    socketRef.current = socket;
 
-    // Handle incoming new shapes
-    socket.on('add-object', (data) => {
-      fabric.util.enlivenObjects([data.obj], ([obj]) => {
-        obj.id = data.id;
-        obj.noEmit = true;
-        canvas.add(obj);
-        canvas.requestRenderAll();
+    // Socket event handlers
+    socket.on('canvas-state', (state) => {
+      state.forEach(objData => {
+        addObjectFromData(objData, true);
       });
     });
 
-    // Handle incoming modifications
+    socket.on('add-object', (data) => {
+      addObjectFromData(data, true);
+    });
+
     socket.on('modify-object', (data) => {
       const obj = canvas.getObjects().find(o => o.id === data.id);
       if (obj) {
         obj.noEmit = true;
         obj.set(data.obj);
         obj.setCoords();
-        canvas.requestRenderAll();
+        canvas.renderAll();
+        obj.noEmit = false;
       }
     });
 
-    // Handle incoming removals
     socket.on('remove-object', (data) => {
       const obj = canvas.getObjects().find(o => o.id === data.id);
       if (obj) {
+        obj.noEmit = true;
         canvas.remove(obj);
-        canvas.requestRenderAll();
+        obj.noEmit = false;
       }
     });
 
-    // Cleanup on unmount
+    socket.on('drawing-start', (data) => {
+      startRemoteDrawing(data);
+    });
+
+    socket.on('drawing-path', (data) => {
+      updateRemoteDrawing(data);
+    });
+
+    socket.on('drawing-end', (data) => {
+      endRemoteDrawing(data);
+    });
+
+    socket.on('clear-canvas', () => {
+      canvas.clear();
+      canvas.backgroundColor = 'white';
+      canvas.renderAll();
+    });
+
     return () => {
-      socket.removeAllListeners('add-object');
-      socket.removeAllListeners('modify-object');
-      socket.removeAllListeners('remove-object');
       canvas.dispose();
+      socket.disconnect();
     };
   }, []);
 
-  // Sync Fabric events to socket
+  // Set up canvas event handlers
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
+    const socket = socketRef.current;
+    if (!canvas || !socket) return;
 
-    // Emit new objects
     const handleAdd = (e) => {
       if (!e.target || e.target.noEmit) return;
       e.target.id = `${socket.id}_obj_${nextIdRef.current++}`;
@@ -87,221 +103,318 @@ export default function Whiteboard() {
         id: e.target.id,
         obj: e.target.toObject([
           'left', 'top', 'width', 'height',
-          'radius', 'fill', 'stroke', 'strokeWidth', 'text'
+          'radius', 'fill', 'stroke', 'strokeWidth', 'text',
+          'scaleX', 'scaleY', 'angle', 'rx', 'ry'
         ])
       };
       socket.emit('add-object', payload);
     };
 
-    // Emit modifications
     const handleModify = (e) => {
       if (!e.target || e.target.noEmit) return;
       socket.emit('modify-object', {
         id: e.target.id,
         obj: e.target.toObject([
           'left', 'top', 'width', 'height',
-          'radius', 'fill', 'stroke', 'strokeWidth', 'text'
+          'radius', 'fill', 'stroke', 'strokeWidth', 'text',
+          'scaleX', 'scaleY', 'angle', 'rx', 'ry'
         ])
       });
     };
 
-    // Emit removals
     const handleRemove = (e) => {
       if (!e.target || e.target.noEmit) return;
       socket.emit('remove-object', { id: e.target.id });
     };
 
-    // FIXED: Add text editing event handlers for real-time sync
     const handleTextChanged = (e) => {
       if (!e.target || e.target.noEmit) return;
       socket.emit('modify-object', {
         id: e.target.id,
         obj: e.target.toObject([
           'left', 'top', 'width', 'height',
-          'radius', 'fill', 'stroke', 'strokeWidth', 'text'
+          'radius', 'fill', 'stroke', 'strokeWidth', 'text',
+          'scaleX', 'scaleY', 'angle', 'rx', 'ry'
         ])
       });
     };
 
-    const handleTextEditingExited = (e) => {
-      if (!e.target || e.target.noEmit) return;
-      socket.emit('modify-object', {
-        id: e.target.id,
-        obj: e.target.toObject([
-          'left', 'top', 'width', 'height',
-          'radius', 'fill', 'stroke', 'strokeWidth', 'text'
-        ])
-      });
-    };
-
+    // Register event handlers
     canvas.on('object:added', handleAdd);
     canvas.on('object:modified', handleModify);
     canvas.on('object:removed', handleRemove);
-    
-    // FIXED: Add text editing event listeners
     canvas.on('text:changed', handleTextChanged);
-    canvas.on('text:editing:exited', handleTextEditingExited);
+    canvas.on('text:editing:exited', handleTextChanged);
 
     return () => {
       canvas.off('object:added', handleAdd);
       canvas.off('object:modified', handleModify);
       canvas.off('object:removed', handleRemove);
       canvas.off('text:changed', handleTextChanged);
-      canvas.off('text:editing:exited', handleTextEditingExited);
+      canvas.off('text:editing:exited', handleTextChanged);
     };
   }, []);
 
-  // Tool, color, and width updates
+  // Set up drawing mode with eraser implementation
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    // Remove old mouse handlers
-    canvas.off('mouse:down');
-    canvas.off('mouse:move');
-    canvas.off('mouse:up');
-
-    // Common setup
-    canvas.isDrawingMode = tool === 'pen';
-    canvas.selection = tool === 'select';
-
-    // Adjust object interactivity
-    canvas.forEachObject(o => {
-      o.selectable = tool === 'select';
-      o.evented = tool !== 'pen';
-    });
-
-    if (tool === 'pen') {
-      const pencil = new fabric.PencilBrush(canvas);
-      pencil.color = color;
-      pencil.width = lineWidth;
-      canvas.freeDrawingBrush = pencil;
-    }
-
-    else if (tool === 'eraser') {
-      canvas.isDrawingMode = false;
+    if (selectedTool === 'pen') {
+      canvas.isDrawingMode = true;
+      canvas.freeDrawingBrush.width = strokeWidth;
+      canvas.freeDrawingBrush.color = strokeColor;
       canvas.selection = false;
-      canvas.on('mouse:down', e => {
-        const target = canvas.findTarget(e.e);
-        if (target) {
-          canvas.remove(target);
-          canvas.requestRenderAll();
-        }
-      });
-    }
-
-    else if (['rectangle', 'circle', 'text'].includes(tool)) {
-      canvas.isDrawingMode = false;
-      canvas.selection = false;
-      canvas.forEachObject(o => o.selectable = false);
-
-      canvas.on('mouse:down', opt => {
-        const p = canvas.getPointer(opt.e);
-        startPointRef.current = p;
+      
+      // Drawing event handlers
+      const handleDrawingStart = (e) => {
         isDrawingRef.current = true;
+        socketRef.current.emit('drawing-start', {
+          pointer: canvas.getPointer(e.e),
+          color: strokeColor,
+          width: strokeWidth
+        });
+      };
 
-        if (tool === 'rectangle') {
-          currentShapeRef.current = new fabric.Rect({
-            left: p.x, top: p.y, width: 0, height: 0,
-            fill: 'transparent', stroke: color, strokeWidth: lineWidth
-          });
-        } else if (tool === 'circle') {
-          currentShapeRef.current = new fabric.Circle({
-            left: p.x, top: p.y, radius: 0,
-            fill: 'transparent', stroke: color, strokeWidth: lineWidth
-          });
-        }
+      const handleDrawingPath = (e) => {
+        if (!isDrawingRef.current) return;
+        socketRef.current.emit('drawing-path', {
+          pointer: canvas.getPointer(e.e)
+        });
+      };
 
-        if (currentShapeRef.current) {
-          currentShapeRef.current.id = `${socket.id}_obj_${nextIdRef.current++}`;
-          canvas.add(currentShapeRef.current);
-          canvas.requestRenderAll();
-        }
-
-        if (tool === 'text') {
-          const txt = new fabric.IText('Edit me', {
-            left: p.x, top: p.y, fill: color, fontSize: 24
-          });
-          txt.id = `${socket.id}_obj_${nextIdRef.current++}`;
-          canvas.add(txt);
-          canvas.setActiveObject(txt);
-          txt.enterEditing();
-        }
-      });
-
-      canvas.on('mouse:move', opt => {
-        if (!isDrawingRef.current || !currentShapeRef.current) return;
-        const p = canvas.getPointer(opt.e);
-        const start = startPointRef.current;
-
-        if (tool === 'rectangle') {
-          const newProps = {
-            width: Math.abs(p.x - start.x),
-            height: Math.abs(p.y - start.y),
-            left: Math.min(start.x, p.x), 
-            top: Math.min(start.y, p.y)
-          };
-          currentShapeRef.current.set(newProps);
-          
-          // Emit real-time updates during drawing
-          socket.emit('modify-object', {
-            id: currentShapeRef.current.id,
-            obj: currentShapeRef.current.toObject([
-              'left', 'top', 'width', 'height',
-              'fill', 'stroke', 'strokeWidth'
-            ])
-          });
-        } else if (tool === 'circle') {
-          const dx = p.x - start.x, dy = p.y - start.y;
-          const radius = Math.sqrt(dx*dx + dy*dy) / 2;
-          const centerX = (start.x + p.x) / 2;
-          const centerY = (start.y + p.y) / 2;
-          const newProps = { 
-            radius, 
-            left: centerX - radius, 
-            top: centerY - radius 
-          };
-          currentShapeRef.current.set(newProps);
-          
-          // Emit real-time updates during drawing
-          socket.emit('modify-object', {
-            id: currentShapeRef.current.id,
-            obj: currentShapeRef.current.toObject([
-              'left', 'top', 'radius',
-              'fill', 'stroke', 'strokeWidth'
-            ])
-          });
-        }
-        canvas.requestRenderAll();
-      });
-
-      canvas.on('mouse:up', () => {
+      const handleDrawingEnd = () => {
         isDrawingRef.current = false;
-        currentShapeRef.current = null;
-      });
-    }
+        socketRef.current.emit('drawing-end', {});
+      };
 
-    return () => {
-      canvas.off('mouse:down');
-      canvas.off('mouse:move');
-      canvas.off('mouse:up');
-    };
-  }, [tool, color, lineWidth]);
+      canvas.on('path:created', handleDrawingEnd);
+      canvas.on('mouse:down', handleDrawingStart);
+      canvas.on('mouse:move', handleDrawingPath);
+
+      return () => {
+        canvas.off('path:created', handleDrawingEnd);
+        canvas.off('mouse:down', handleDrawingStart);
+        canvas.off('mouse:move', handleDrawingPath);
+      };
+    } else if (selectedTool === 'eraser') {
+      // Simple eraser using white color
+      canvas.isDrawingMode = true;
+      canvas.freeDrawingBrush.width = strokeWidth * 3; // Make eraser wider
+      canvas.freeDrawingBrush.color = canvas.backgroundColor || 'white'; // Use canvas background color
+      canvas.selection = false;
+      
+      // Use the same drawing handlers as pen tool but with white color
+      const handleEraserStart = (e) => {
+        isDrawingRef.current = true;
+        socketRef.current.emit('drawing-start', {
+          pointer: canvas.getPointer(e.e),
+          color: canvas.backgroundColor || 'white',
+          width: strokeWidth * 3
+        });
+      };
+
+      const handleEraserPath = (e) => {
+        if (!isDrawingRef.current) return;
+        socketRef.current.emit('drawing-path', {
+          pointer: canvas.getPointer(e.e)
+        });
+      };
+
+      const handleEraserEnd = () => {
+        isDrawingRef.current = false;
+        socketRef.current.emit('drawing-end', {});
+      };
+
+      canvas.on('path:created', handleEraserEnd);
+      canvas.on('mouse:down', handleEraserStart);
+      canvas.on('mouse:move', handleEraserPath);
+
+      return () => {
+        canvas.off('path:created', handleEraserEnd);
+        canvas.off('mouse:down', handleEraserStart);
+        canvas.off('mouse:move', handleEraserPath);
+      };
+    } else {
+      canvas.isDrawingMode = false;
+      canvas.selection = true;
+    }
+  }, [selectedTool, strokeColor, strokeWidth]);
+
+  // Helper functions
+  const addObjectFromData = (data, isRemote = false) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    window.fabric.util.enlivenObjects([data.obj], (objects) => {
+      const obj = objects[0];
+      obj.id = data.id;
+      if (isRemote) obj.noEmit = true;
+      canvas.add(obj);
+      if (isRemote) obj.noEmit = false;
+    });
+  };
+
+  const startRemoteDrawing = (data) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const path = new window.fabric.Path(`M ${data.pointer.x} ${data.pointer.y}`, {
+      stroke: data.color,
+      strokeWidth: data.width,
+      fill: '',
+      selectable: false
+    });
+    path.noEmit = true;
+    currentPathRef.current = path;
+    canvas.add(path);
+  };
+
+  const updateRemoteDrawing = (data) => {
+    const path = currentPathRef.current;
+    if (!path) return;
+
+    const pathData = path.path;
+    pathData.push(['L', data.pointer.x, data.pointer.y]);
+    path.path = pathData;
+    path._setPath(path.path);
+    fabricCanvasRef.current.renderAll();
+  };
+
+  const endRemoteDrawing = () => {
+    if (currentPathRef.current) {
+      currentPathRef.current.noEmit = false;
+      currentPathRef.current = null;
+    }
+  };
+
+  // Tool functions
+  const addRectangle = () => {
+    const canvas = fabricCanvasRef.current;
+    const rect = new window.fabric.Rect({
+      left: 100,
+      top: 100,
+      width: 100,
+      height: 100,
+      fill: fillColor,
+      stroke: strokeColor,
+      strokeWidth: strokeWidth
+    });
+    canvas.add(rect);
+  };
+
+  const addCircle = () => {
+    const canvas = fabricCanvasRef.current;
+    const circle = new window.fabric.Circle({
+      left: 100,
+      top: 100,
+      radius: 50,
+      fill: fillColor,
+      stroke: strokeColor,
+      strokeWidth: strokeWidth
+    });
+    canvas.add(circle);
+  };
+
+  const addText = () => {
+    const canvas = fabricCanvasRef.current;
+    const text = new window.fabric.IText('Click to edit', {
+      left: 100,
+      top: 100,
+      fontSize: 20,
+      fill: strokeColor
+    });
+    canvas.add(text);
+  };
+
+  const deleteSelected = () => {
+    const canvas = fabricCanvasRef.current;
+    const activeObjects = canvas.getActiveObjects();
+    activeObjects.forEach(obj => {
+      canvas.remove(obj);
+    });
+    canvas.discardActiveObject();
+  };
+
+  const clearCanvas = () => {
+    const canvas = fabricCanvasRef.current;
+    canvas.clear();
+    canvas.backgroundColor = 'white';
+    canvas.renderAll();
+    socketRef.current.emit('clear-canvas');
+  };
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-        {['select','pen','eraser','rectangle','circle','text'].map(t => (
-          <button key={t} onClick={() => setTool(t)}
-            style={{ background: tool===t?'#ddd':'' }}>
-            {t.charAt(0).toUpperCase()+t.slice(1)}
-          </button>
-        ))}
-        <input type="color" value={color} onChange={e=>setColor(e.target.value)} />
-        <input type="range" min={1} max={20} value={lineWidth}
-          onChange={e=>setLineWidth(+e.target.value)} />
+    <div className="whiteboard-container">
+      <div className="toolbar">
+        <button 
+          className={selectedTool === 'select' ? 'active' : ''}
+          onClick={() => setSelectedTool('select')}
+        >
+          Select
+        </button>
+        <button 
+          className={selectedTool === 'pen' ? 'active' : ''}
+          onClick={() => setSelectedTool('pen')}
+        >
+          Pen
+        </button>
+        <button 
+          className={selectedTool === 'eraser' ? 'active' : ''}
+          onClick={() => setSelectedTool('eraser')}
+        >
+          Eraser
+        </button>
+        
+        <div className="separator"></div>
+        
+        <button onClick={addRectangle}>Rectangle</button>
+        <button onClick={addCircle}>Circle</button>
+        <button onClick={addText}>Text</button>
+        
+        <div className="separator"></div>
+        
+        <label>
+          Stroke:
+          <input 
+            type="color" 
+            value={strokeColor} 
+            onChange={(e) => setStrokeColor(e.target.value)}
+          />
+        </label>
+        
+        <label>
+          Fill:
+          <input 
+            type="color" 
+            value={fillColor} 
+            onChange={(e) => setFillColor(e.target.value)}
+          />
+        </label>
+        
+        <label>
+          Width:
+          <input 
+            type="range" 
+            min="1" 
+            max="20" 
+            value={strokeWidth}
+            onChange={(e) => setStrokeWidth(parseInt(e.target.value))}
+          />
+          <span>{strokeWidth}</span>
+        </label>
+        
+        <div className="separator"></div>
+        
+        <button onClick={deleteSelected}>Delete</button>
+        <button onClick={clearCanvas}>Clear</button>
       </div>
-      <canvas ref={canvasRef} />
+      
+      <div className="canvas-container">
+        <canvas ref={canvasRef}></canvas>
+      </div>
     </div>
   );
-}
+};
+
+export default WhiteboardApp;
