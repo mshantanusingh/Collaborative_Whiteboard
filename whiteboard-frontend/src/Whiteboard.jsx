@@ -225,7 +225,9 @@ const WhiteboardApp = () => {
 
   // Initialize socket
   useEffect(() => {
-    const socket = io('http://localhost:10000');
+    const socket = io(process.env.NEXT_PUBLIC_API_URL, {
+  transports: ['websocket', 'polling']
+});
     socketRef.current = socket;
 
     socket.on('registration-success', (data) => {
