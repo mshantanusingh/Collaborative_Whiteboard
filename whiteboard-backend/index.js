@@ -324,6 +324,10 @@ function generateRoomId() {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
-server.listen(4000, () => {
-  console.log('Server running on port 4000');
+const PORT = process.env.PORT || 10000;
+const HOST = '0.0.0.0';
+
+server.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
 });
+
