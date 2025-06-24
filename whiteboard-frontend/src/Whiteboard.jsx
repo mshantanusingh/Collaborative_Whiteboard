@@ -225,7 +225,7 @@ const WhiteboardApp = () => {
 
   // Initialize socket
   useEffect(() => {
-    const socket = io('http://localhost:4000');
+    const socket = io('http://localhost:10000');
     socketRef.current = socket;
 
     socket.on('registration-success', (data) => {
