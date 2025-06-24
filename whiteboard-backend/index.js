@@ -8,7 +8,7 @@ const app = express();
 // Add CORS configuration
 app.use(cors({
   origin: [
-    'https://collaborative-whiteboard-murex.vercel.app/', // Replace with your actual Vercel URL
+    'https://collaborative-whiteboard-murex.vercel.app', // Replace with your actual Vercel URL
     'http://localhost:3000', // For local development
     'http://localhost:5173'  // For Vite dev server
   ],
@@ -22,7 +22,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      'https://collaborative-whiteboard-murex.vercel.app/', // Replace with your actual Vercel URL
+      'https://collaborative-whiteboard-murex.vercel.app', // Replace with your actual Vercel URL
       'http://localhost:3000',
       'http://localhost:5173'
     ],
