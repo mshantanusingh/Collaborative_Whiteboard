@@ -68,19 +68,16 @@ const WhiteboardApp = () => {
     }
 
     try {
-      // Get the canvas as data URL
       const dataURL = canvas.toDataURL({
         format: format,
         quality: 1.0,
-        multiplier: 2 // Higher resolution
+        multiplier: 2
       });
 
-      // Create download link
       const link = document.createElement('a');
       link.download = `whiteboard-${currentRoom?.roomName || 'canvas'}-${new Date().toISOString().slice(0, 10)}.${format}`;
       link.href = dataURL;
       
-      // Trigger download
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -101,52 +98,24 @@ const WhiteboardApp = () => {
     }
 
     try {
-      // Get canvas dimensions
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-      
-      // Create a new window for PDF generation
       const printWindow = window.open('', '_blank');
-      
-      // Get canvas as image
       const dataURL = canvas.toDataURL({
         format: 'png',
         quality: 1.0,
         multiplier: 2
       });
 
-      // Create HTML content for PDF
       const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
           <title>Whiteboard - ${currentRoom?.roomName || 'Canvas'}</title>
           <style>
-            body {
-              margin: 0;
-              padding: 20px;
-              font-family: Arial, sans-serif;
-            }
-            .header {
-              text-align: center;
-              margin-bottom: 20px;
-            }
-            .canvas-image {
-              max-width: 100%;
-              height: auto;
-              border: 1px solid #ddd;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            }
-            .footer {
-              margin-top: 20px;
-              text-align: center;
-              font-size: 12px;
-              color: #666;
-            }
-            @media print {
-              body { margin: 0; padding: 10px; }
-              .no-print { display: none; }
-            }
+            body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+            .header { text-align: center; margin-bottom: 20px; }
+            .canvas-image { max-width: 100%; height: auto; border: 1px solid #ddd; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+            .footer { margin-top: 20px; text-align: center; font-size: 12px; color: #666; }
+            @media print { body { margin: 0; padding: 10px; } .no-print { display: none; } }
           </style>
         </head>
         <body>
@@ -169,11 +138,8 @@ const WhiteboardApp = () => {
         </html>
       `;
 
-      // Write content to new window
       printWindow.document.write(htmlContent);
       printWindow.document.close();
-      
-      // Focus the new window
       printWindow.focus();
       
       setShowExportModal(false);
@@ -191,7 +157,6 @@ const WhiteboardApp = () => {
     }
 
     try {
-      // Get canvas data as JSON
       const canvasData = {
         version: '1.0',
         roomName: currentRoom?.roomName || 'Untitled',
@@ -200,10 +165,7 @@ const WhiteboardApp = () => {
         canvasData: canvas.toJSON()
       };
 
-      // Convert to JSON string
       const jsonString = JSON.stringify(canvasData, null, 2);
-      
-      // Create blob and download
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       
@@ -266,7 +228,6 @@ const WhiteboardApp = () => {
     const socket = io('http://localhost:4000');
     socketRef.current = socket;
 
-    // Socket event handlers
     socket.on('registration-success', (data) => {
       setIsRegistered(true);
       setUsername(data.username);
@@ -304,7 +265,6 @@ const WhiteboardApp = () => {
       alert(data.message);
     });
 
-    // Canvas sync events
     socket.on('add-object', (data) => {
       addObjectFromData(data, true);
     });
@@ -721,25 +681,6 @@ const WhiteboardApp = () => {
     socketRef.current.emit('clear-canvas');
   };
 
-  const refreshCanvas = () => {
-    if (fabricCanvasRef.current) {
-      fabricCanvasRef.current.dispose();
-      fabricCanvasRef.current = null;
-    }
-    
-    setTimeout(() => {
-      if (canvasRef.current) {
-        const canvas = new window.fabric.Canvas(canvasRef.current, {
-          width: 800,
-          height: 600,
-          backgroundColor: 'white'
-        });
-        fabricCanvasRef.current = canvas;
-        setupCanvasEvents(canvas);
-      }
-    }, 100);
-  };
-
   // Registration screen
   if (!isRegistered) {
     return (
@@ -854,12 +795,14 @@ const WhiteboardApp = () => {
           <span>Permission: {userPermission}</span>
           {isOwner && <span className="owner-badge">Owner</span>}
         </div>
+        
+        <h1 className="room-title">Collaborative Whiteboard</h1>
+        
         <div className="room-controls">
           {isOwner && (
             <button onClick={loadRoomUsers}>Manage Users</button>
           )}
           <button onClick={() => setShowExportModal(true)}>Save/Export</button>
-          <button onClick={refreshCanvas}>Refresh Canvas</button>
           <button onClick={() => window.location.reload()}>Leave Room</button>
         </div>
       </div>
@@ -961,7 +904,6 @@ const WhiteboardApp = () => {
         <canvas ref={canvasRef}></canvas>
       </div>
 
-      {/* Export Modal */}
       {showExportModal && (
         <div className="modal">
           <div className="modal-content">
@@ -1007,7 +949,6 @@ const WhiteboardApp = () => {
         </div>
       )}
 
-      {/* User Management Modal */}
       {roomUsers.length > 0 && (
         <div className="modal">
           <div className="modal-content">
