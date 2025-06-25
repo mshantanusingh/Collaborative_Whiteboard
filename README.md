@@ -106,6 +106,9 @@ Update Socket.IO connection URL in WhiteboardApp.jsx if necessary:
 ```});```
 
 # Running the Full Application
+
+If the setup is complete you just need to run the commands given below.
+
 ## Terminal 1: Backend
 bash
 
