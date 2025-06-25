@@ -5,12 +5,12 @@ const { Server } = require('socket.io');
 
 const app = express();
 
-// Add CORS configuration
+// CORS configuration for frontend domains
 app.use(cors({
   origin: [
-    'https://collaborative-whiteboard-murex.vercel.app', // Replace with your actual Vercel URL
-    'http://localhost:3000', // For local development
-    'http://localhost:5173'  // For Vite dev server
+    'https://collaborative-whiteboard-murex.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -22,7 +22,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      'https://collaborative-whiteboard-murex.vercel.app', // Replace with your actual Vercel URL
+      'https://collaborative-whiteboard-murex.vercel.app',
       'http://localhost:3000',
       'http://localhost:5173'
     ],
@@ -30,21 +30,21 @@ const io = new Server(server, {
   }
 });
 
-// Store rooms and their data
+// In-memory storage for rooms and user sessions
 const rooms = new Map();
-const userSessions = new Map(); // Track user sessions
+const userSessions = new Map();
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  // User registration
+  // Register new user with username
   socket.on('register-user', (data) => {
     const { username } = data;
     userSessions.set(socket.id, { username, currentRoom: null });
     socket.emit('registration-success', { username });
   });
 
-  // Get public rooms list
+  // Send list of public rooms
   socket.on('get-rooms', () => {
     const publicRooms = Array.from(rooms.values())
       .filter(room => !room.isPrivate)
@@ -58,7 +58,7 @@ io.on('connection', (socket) => {
     socket.emit('rooms-list', publicRooms);
   });
 
-  // Create room
+  // Create new room with specified settings
   socket.on('create-room', (data) => {
     const { roomName, isPrivate, password, defaultPermission } = data;
     const user = userSessions.get(socket.id);
@@ -80,7 +80,7 @@ io.on('connection', (socket) => {
       defaultPermission: defaultPermission || 'edit'
     };
 
-    // Add creator as owner with edit permission
+    // Set creator as owner with full permissions
     room.users.set(socket.id, {
       username: user.username,
       permission: 'edit',
@@ -101,7 +101,7 @@ io.on('connection', (socket) => {
     console.log(`Room created: ${roomName} (${roomId}) by ${user.username}`);
   });
 
-  // Join room
+  // Join existing room with password validation
   socket.on('join-room', (data) => {
     const { roomId, password } = data;
     const user = userSessions.get(socket.id);
@@ -117,13 +117,13 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Check password if required
+    // Validate password for protected rooms
     if (room.password && room.password !== password) {
       socket.emit('error', { message: 'Incorrect password' });
       return;
     }
 
-    // Leave current room if in one
+    // Leave current room if user is already in one
     if (user.currentRoom) {
       socket.leave(user.currentRoom);
       const currentRoom = rooms.get(user.currentRoom);
@@ -136,7 +136,7 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Join new room
+    // Add user to new room
     room.users.set(socket.id, {
       username: user.username,
       permission: room.defaultPermission,
@@ -146,7 +146,7 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     user.currentRoom = roomId;
 
-    // Send room data to user
+    // Send room data including canvas state
     socket.emit('room-joined', {
       roomId,
       roomName: room.name,
@@ -155,7 +155,7 @@ io.on('connection', (socket) => {
       canvasState: room.canvasState
     });
 
-    // Notify others in room
+    // Notify other users in room
     socket.to(roomId).emit('user-joined', {
       username: user.username,
       userCount: room.users.size
@@ -164,7 +164,7 @@ io.on('connection', (socket) => {
     console.log(`${user.username} joined room: ${room.name}`);
   });
 
-  // Change user permission (owner only)
+  // Change user permissions (owner only)
   socket.on('change-permission', (data) => {
     const { targetUserId, newPermission } = data;
     const user = userSessions.get(socket.id);
@@ -183,20 +183,19 @@ io.on('connection', (socket) => {
 
     targetUser.permission = newPermission;
     
-    // Notify the target user
+    // Notify target user of permission change
     io.to(targetUserId).emit('permission-changed', {
       newPermission,
       changedBy: user.username
     });
 
-    // Notify room owner
     socket.emit('permission-change-success', {
       targetUsername: targetUser.username,
       newPermission
     });
   });
 
-  // Canvas operations with permission checks
+  // Canvas object operations with permission validation
   socket.on('add-object', (data) => {
     const user = userSessions.get(socket.id);
     const room = user ? rooms.get(user.currentRoom) : null;
@@ -221,6 +220,7 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Update object in canvas state
     const index = room.canvasState.findIndex(obj => obj.id === data.id);
     if (index !== -1) {
       room.canvasState[index] = data;
@@ -242,7 +242,7 @@ io.on('connection', (socket) => {
     socket.to(user.currentRoom).emit('remove-object', data);
   });
 
-  // Drawing events with permission checks
+  // Real-time drawing synchronization with permission checks
   socket.on('drawing-start', (data) => {
     const user = userSessions.get(socket.id);
     const room = user ? rooms.get(user.currentRoom) : null;
@@ -279,6 +279,7 @@ io.on('connection', (socket) => {
     socket.to(user.currentRoom).emit('drawing-end', data);
   });
 
+  // Clear entire canvas
   socket.on('clear-canvas', () => {
     const user = userSessions.get(socket.id);
     const room = user ? rooms.get(user.currentRoom) : null;
@@ -293,7 +294,7 @@ io.on('connection', (socket) => {
     socket.to(user.currentRoom).emit('clear-canvas');
   });
 
-  // Get room users (for owner to manage permissions)
+  // Get room users for permission management (owner only)
   socket.on('get-room-users', () => {
     const user = userSessions.get(socket.id);
     const room = user ? rooms.get(user.currentRoom) : null;
@@ -313,6 +314,7 @@ io.on('connection', (socket) => {
     socket.emit('room-users', users);
   });
 
+  // Handle user disconnection and cleanup
   socket.on('disconnect', () => {
     const user = userSessions.get(socket.id);
     if (user && user.currentRoom) {
@@ -324,7 +326,7 @@ io.on('connection', (socket) => {
           userCount: room.users.size
         });
 
-        // Delete room if empty and owner left
+        // Clean up empty rooms
         if (room.users.size === 0) {
           rooms.delete(user.currentRoom);
           console.log(`Room deleted: ${room.name}`);
@@ -336,6 +338,7 @@ io.on('connection', (socket) => {
   });
 });
 
+// Generate unique room identifier
 function generateRoomId() {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }

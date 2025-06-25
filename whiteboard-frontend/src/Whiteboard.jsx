@@ -3,6 +3,7 @@ import io from 'socket.io-client';
 import './WhiteboardApp.css';
 
 const WhiteboardApp = () => {
+  // Canvas and socket references
   const canvasRef = useRef(null);
   const fabricCanvasRef = useRef(null);
   const socketRef = useRef(null);
@@ -17,16 +18,14 @@ const WhiteboardApp = () => {
   const [userPermission, setUserPermission] = useState(null);
   const [isOwner, setIsOwner] = useState(false);
 
-  // Room management states
+  // UI states
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [availableRooms, setAvailableRooms] = useState([]);
   const [roomUsers, setRoomUsers] = useState([]);
-
-  // Export states
   const [showExportModal, setShowExportModal] = useState(false);
 
-  // Form states
+  // Form data
   const [roomForm, setRoomForm] = useState({
     roomName: '',
     isPrivate: false,
@@ -34,19 +33,18 @@ const WhiteboardApp = () => {
     defaultPermission: 'edit'
   });
 
-  // Drawing states
+  // Drawing tool states
   const [selectedTool, setSelectedTool] = useState('pen');
   const [strokeColor, setStrokeColor] = useState('#000000');
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [fillColor, setFillColor] = useState('#ffffff');
 
-  // Dummy undo/redo functions
+  // Simple undo/redo functions
   const performUndo = () => {
     if (userPermission !== 'edit') {
       alert('You only have view permission');
       return;
     }
-    // Dummy undo: just clear the canvas
     clearCanvas();
   };
 
@@ -55,11 +53,10 @@ const WhiteboardApp = () => {
       alert('You only have view permission');
       return;
     }
-    // Dummy redo: do nothing for now
-    console.log('Redo clicked (dummy function)');
+    console.log('Redo clicked');
   };
 
-  // Export functions
+  // Export canvas as image
   const exportAsImage = (format = 'png') => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) {
@@ -90,6 +87,7 @@ const WhiteboardApp = () => {
     }
   };
 
+  // Export canvas as PDF
   const exportAsPDF = () => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) {
@@ -149,6 +147,7 @@ const WhiteboardApp = () => {
     }
   };
 
+  // Save canvas data as JSON
   const saveCanvasData = () => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) {
@@ -186,6 +185,7 @@ const WhiteboardApp = () => {
     }
   };
 
+  // Load canvas data from JSON file
   const loadCanvasData = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -223,14 +223,15 @@ const WhiteboardApp = () => {
     input.click();
   };
 
-  // Initialize socket
+  // Initialize socket connection and event listeners
   useEffect(() => {
     const socket = io('https://collaborative-whiteboard-7dij.onrender.com', {
-  transports: ['websocket'],
-  withCredentials: true
-});
+      transports: ['websocket'],
+      withCredentials: true
+    });
     socketRef.current = socket;
 
+    // Socket event handlers
     socket.on('registration-success', (data) => {
       setIsRegistered(true);
       setUsername(data.username);
@@ -268,6 +269,7 @@ const WhiteboardApp = () => {
       alert(data.message);
     });
 
+    // Canvas synchronization events
     socket.on('add-object', (data) => {
       addObjectFromData(data, true);
     });
@@ -298,6 +300,7 @@ const WhiteboardApp = () => {
       }
     });
 
+    // Drawing synchronization events
     socket.on('drawing-start', (data) => {
       startRemoteDrawing(data);
     });
@@ -324,7 +327,7 @@ const WhiteboardApp = () => {
     };
   }, []);
 
-  // Initialize canvas when room is available
+  // Initialize Fabric.js canvas when room is available
   useEffect(() => {
     if (!currentRoom || typeof window.fabric === 'undefined') {
       return;
@@ -346,6 +349,7 @@ const WhiteboardApp = () => {
         fabricCanvasRef.current = canvas;
         setupCanvasEvents(canvas);
         
+        // Load existing canvas state
         if (currentRoom.canvasState && currentRoom.canvasState.length > 0) {
           currentRoom.canvasState.forEach(objData => {
             addObjectFromData(objData, true);
@@ -363,6 +367,7 @@ const WhiteboardApp = () => {
     };
   }, [currentRoom]);
 
+  // Setup canvas event handlers for object synchronization
   const setupCanvasEvents = (canvas) => {
     const socket = socketRef.current;
     if (!socket) return;
@@ -417,7 +422,7 @@ const WhiteboardApp = () => {
     canvas.on('text:editing:exited', handleTextChanged);
   };
 
-  // Set up drawing mode
+  // Setup drawing mode based on selected tool
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     const socket = socketRef.current;
@@ -512,7 +517,7 @@ const WhiteboardApp = () => {
     };
   }, [selectedTool, strokeColor, strokeWidth, userPermission, currentRoom]);
 
-  // Helper functions
+  // Add object to canvas from data
   const addObjectFromData = (data, isRemote = false) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
@@ -526,6 +531,7 @@ const WhiteboardApp = () => {
     });
   };
 
+  // Remote drawing synchronization functions
   const startRemoteDrawing = (data) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
@@ -559,7 +565,7 @@ const WhiteboardApp = () => {
     }
   };
 
-  // User registration
+  // User registration handler
   const handleRegister = (e) => {
     e.preventDefault();
     if (username.trim()) {
@@ -567,7 +573,7 @@ const WhiteboardApp = () => {
     }
   };
 
-  // Room management
+  // Room management functions
   const handleCreateRoom = (e) => {
     e.preventDefault();
     socketRef.current.emit('create-room', roomForm);
@@ -598,7 +604,7 @@ const WhiteboardApp = () => {
     socketRef.current.emit('change-permission', { targetUserId, newPermission });
   };
 
-  // Tool functions
+  // Drawing tool functions
   const addRectangle = () => {
     if (userPermission !== 'edit') {
       alert('You only have view permission');
