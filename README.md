@@ -1,62 +1,116 @@
-# Collaborative Whiteboard Application
+#  Collaborative Whiteboard
 
-A real-time collaborative whiteboard application built with React, Node.js, Socket.io, and Fabric.js. Multiple users can draw and collaborate on a shared canvas in real-time.
+A real-time collaborative whiteboard application that allows multiple users to draw, create shapes, and collaborate on a shared canvas in real-time. Built with **React**, **Socket.IO**, and **Fabric.js** for seamless multi-user drawing experiences.
 
-## Features
+---
 
-- **Real-time Collaboration**: Multiple users can draw simultaneously
-- **Room Management**: Create and join rooms with password protection
-- **Drawing Tools**: Pen, eraser, shapes (rectangle, circle), and text
-- **User Permissions**: Edit and view-only access control
-- **Export Options**: Save as PNG, JPEG, PDF, or JSON
-- **Undo/Redo**: Basic undo functionality
+##  Project Description
 
-## Prerequisites
+The Collaborative Whiteboard is a web-based platform designed for teams to work together on a shared digital canvas.
 
-- Node.js (v14 or higher)
-- npm
+Users can:
+- Create or join rooms
+- Draw using multiple tools
+- Add shapes and text
+- See changes from other users in real-time
 
-## Installation & Setup
+It features **user permission management**, allowing room owners to control who can edit or view the canvas.
 
-### Backend Setup
-1. Navigate to the backend directory
-2. Install dependencies:
+---
 
+##  Key Features
+
+###  User Management
+- Custom usernames and registration
+- Create rooms with public/private settings
+- Password-protected rooms
+- Permission-based access control (edit/view-only)
+- Real-time user presence indicators
+
+###  Drawing Tools
+- Freehand pen tool (custom color & stroke width)
+- Eraser
+- Rectangle and circle tools
+- Editable text elements
+- Selection and object manipulation
+
+###  Collaboration Features
+- Real-time canvas sync across all users
+- Live path drawing & object updates
+- Synchronized canvas clearing
+- User join/leave notifications
+
+###  Export & Save Options
+- Export as PNG and JPEG images
+- Export as PDF with metadata
+- Export/import canvas data as JSON
+
+###  Room Management
+- Public & private room creation
+- Password protection
+- Room owner controls (edit/view permissions)
+- Default permissions for new users
+
+---
+
+##  Tech Stack
+
+###  Frontend
+- **React** (with Hooks)
+- **Fabric.js** – Canvas manipulation
+- **Socket.IO Client** – Real-time communication
+- **CSS3** – Responsive styling
+- **Vite** – Fast build & dev server
+
+###  Backend
+- **Node.js**
+- **Express.js**
+- **Socket.IO**
+- **CORS**
+
+---
+
+##  Setup Instructions (Local Development)
+
+###  Prerequisites
+- Node.js (v14+)
+- npm or yarn
+- Modern browser (with WebSocket support)
+
+---
+
+###  Backend Setup
+
+bash
+```cd backend```
+```npm install```
 ```npm install express socket.io cors```
+```node server.js```
 
-3. Start the server: `node index`
+Runs on: http://localhost:10000
 
-The backend will run on `http://localhost:4000`
-
-### Frontend Setup
-1. Navigate to the frontend directory
-2. Install dependencies:
-
-```npm install react react-dom socket.io-client fabric```
+bash
+```cd frontend```
+```npm install```
+```npm install react react-dom socket.io-client```
 ```npm install -D vite @vitejs/plugin-react```
+```npm run dev```
 
-3. Start the development server: `npm run dev`
+Update Socket.IO connection URL in WhiteboardApp.jsx if necessary:
+```const socket = io('http://localhost:10000', {```
+  ```transports: ['websocket'],```
+ ``` withCredentials: true```
+```});```
 
-The frontend will run on `http://localhost:5173`
+# Running the Full Application
+## Terminal 1: Backend
+bash
+```cd backend```
+```node index.js```
+##Terminal 2: Frontend
+bash
+```cd frontend```
+```npm run dev```
 
-## Required Dependencies
+Open your browser at: http://localhost:5173
 
-### Backend
-- `express` - Web application framework
-- `socket.io` - Real-time communication server
-- `cors` - Cross-origin resource sharing
-
-### Frontend
-- `react` - UI framework
-- `react-dom` - React DOM rendering
-- `socket.io-client` - Socket.io client library
-- `fabric` - Canvas manipulation library
-- `vite` - Build tool (dev dependency)
-- `@vitejs/plugin-react` - Vite React plugin (dev dependency)
-
-## Usage
-
-1. Open `http://localhost:5173` in your browser
-2. Enter a username to register
-3. Create a new room or join an existing one
-4. Start drawing and collaborating in real-time!
