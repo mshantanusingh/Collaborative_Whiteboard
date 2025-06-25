@@ -34,18 +34,18 @@ const WhiteboardApp = () => {
     defaultPermission: 'edit'
   });
 
+  // Join room states
+  const [joinRoomData, setJoinRoomData] = useState({
+    roomId: '',
+    password: ''
+  });
+
   // Focus states for input fields
   const [focusStates, setFocusStates] = useState({
     username: false,
     roomName: false,
     password: false,
     joinPassword: false
-  });
-
-  // Join room states
-  const [joinRoomData, setJoinRoomData] = useState({
-    roomId: '',
-    password: ''
   });
 
   // Drawing states
@@ -105,14 +105,89 @@ const WhiteboardApp = () => {
       setShowRoomModal(false);
     });
 
+    socket.on('user-joined', (data) => {
+      console.log(`${data.username} joined the room`);
+    });
+
+    socket.on('user-left', (data) => {
+      console.log(`${data.username} left the room`);
+    });
+
+    socket.on('permission-changed', (data) => {
+      setUserPermission(data.newPermission);
+      alert(`Your permission has been changed to ${data.newPermission} by ${data.changedBy}`);
+    });
+
+    socket.on('room-users', (users) => {
+      setRoomUsers(users);
+    });
+
     socket.on('error', (error) => {
       alert(error.message);
+    });
+
+    // Canvas event listeners
+    socket.on('add-object', (data) => {
+      // Handle canvas object addition
+      console.log('Object added:', data);
+    });
+
+    socket.on('modify-object', (data) => {
+      // Handle canvas object modification
+      console.log('Object modified:', data);
+    });
+
+    socket.on('remove-object', (data) => {
+      // Handle canvas object removal
+      console.log('Object removed:', data);
+    });
+
+    socket.on('drawing-start', (data) => {
+      // Handle drawing start
+      console.log('Drawing started:', data);
+    });
+
+    socket.on('drawing-path', (data) => {
+      // Handle drawing path
+      console.log('Drawing path:', data);
+    });
+
+    socket.on('drawing-end', (data) => {
+      // Handle drawing end
+      console.log('Drawing ended:', data);
+    });
+
+    socket.on('clear-canvas', () => {
+      // Handle canvas clear
+      if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d');
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      }
     });
 
     return () => {
       socket.disconnect();
     };
   }, []);
+
+  // Canvas setup
+  useEffect(() => {
+    if (canvasRef.current && currentRoom) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      
+      // Set canvas background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Store canvas reference for fabric.js compatibility
+      fabricCanvasRef.current = {
+        toDataURL: (options = {}) => {
+          return canvas.toDataURL(`image/${options.format || 'png'}`, options.quality || 1.0);
+        }
+      };
+    }
+  }, [currentRoom]);
 
   // User registration
   const registerUser = () => {
@@ -140,6 +215,18 @@ const WhiteboardApp = () => {
     socketRef.current.emit('get-rooms');
   };
 
+  const getRoomUsers = () => {
+    if (isOwner) {
+      socketRef.current.emit('get-room-users');
+    }
+  };
+
+  const changeUserPermission = (targetUserId, newPermission) => {
+    if (isOwner) {
+      socketRef.current.emit('change-permission', { targetUserId, newPermission });
+    }
+  };
+
   // Canvas functions
   const clearCanvas = () => {
     if (userPermission !== 'edit') {
@@ -149,6 +236,7 @@ const WhiteboardApp = () => {
     socketRef.current.emit('clear-canvas');
   };
 
+  // Dummy undo/redo functions
   const performUndo = () => {
     if (userPermission !== 'edit') {
       alert('You only have view permission');
@@ -236,6 +324,48 @@ const WhiteboardApp = () => {
       console.error('PDF export failed:', error);
       alert('PDF export failed. Please try again.');
     }
+  };
+
+  // Drawing functions
+  const startDrawing = (e) => {
+    if (userPermission !== 'edit') return;
+    
+    isDrawingRef.current = true;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    
+    socketRef.current.emit('drawing-start', { x, y, tool: selectedTool, color: strokeColor, width: strokeWidth });
+  };
+
+  const draw = (e) => {
+    if (!isDrawingRef.current || userPermission !== 'edit') return;
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = selectedTool === 'eraser' ? '#ffffff' : strokeColor;
+    ctx.lineWidth = strokeWidth;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    
+    socketRef.current.emit('drawing-path', { x, y });
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawingRef.current) return;
+    
+    isDrawingRef.current = false;
+    socketRef.current.emit('drawing-end', {});
   };
 
   return (
@@ -418,6 +548,14 @@ const WhiteboardApp = () => {
                 </button>
               ) : (
                 <>
+                  {isOwner && (
+                    <button 
+                      onClick={getRoomUsers}
+                      className="btn btn-secondary"
+                    >
+                      Manage Users
+                    </button>
+                  )}
                   <button 
                     onClick={() => setShowExportModal(true)}
                     className="btn btn-secondary"
@@ -500,6 +638,10 @@ const WhiteboardApp = () => {
                 className="whiteboard-canvas"
                 width={1200}
                 height={600}
+                onMouseDown={startDrawing}
+                onMouseMove={draw}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
               />
             ) : (
               <div className="no-room-message">
@@ -514,6 +656,31 @@ const WhiteboardApp = () => {
               </div>
             )}
           </div>
+
+          {/* Room Users Management (Owner Only) */}
+          {isOwner && roomUsers.length > 0 && (
+            <div className="users-panel">
+              <h3>Room Users</h3>
+              {roomUsers.map(user => (
+                <div key={user.socketId} className="user-item">
+                  <span>{user.username}</span>
+                  <span className={`permission ${user.permission}`}>
+                    {user.permission}
+                  </span>
+                  {!user.isOwner && (
+                    <select
+                      value={user.permission}
+                      onChange={(e) => changeUserPermission(user.socketId, e.target.value)}
+                      className="permission-select"
+                    >
+                      <option value="edit">Edit</option>
+                      <option value="view">View</option>
+                    </select>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
