@@ -225,8 +225,9 @@ const WhiteboardApp = () => {
 
   // Initialize socket
   useEffect(() => {
-    const socket = io(process.env.NEXT_PUBLIC_API_URL, {
-  transports: ['websocket', 'polling']
+    const socket = io('https://collaborative-whiteboard-7dij.onrender.com', {
+  transports: ['websocket'],
+  withCredentials: true
 });
     socketRef.current = socket;
 
