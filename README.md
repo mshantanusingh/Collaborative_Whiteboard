@@ -97,6 +97,7 @@ bash
 ```npm run dev```
 
 Update Socket.IO connection URL in WhiteboardApp.jsx if necessary:
+
 ```const socket = io('http://localhost:10000', {``` <br>
   ```transports: ['websocket'],``` <br>
  ``` withCredentials: true``` <br>
@@ -107,6 +108,7 @@ Update Socket.IO connection URL in WhiteboardApp.jsx if necessary:
 bash
 ```cd backend``` <br>
 ```node index.js```
+
 ##Terminal 2: Frontend
 bash
 ```cd frontend``` <br>
