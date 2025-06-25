@@ -82,15 +82,17 @@ It features **user permission management**, allowing room owners to control who 
 ###  Backend Setup
 
 bash
-```cd backend``` <br>
+
+```cd whiteboard-backend``` <br>
 ```npm install``` <br>
 ```npm install express socket.io cors``` <br>
-```node server.js```
+```node index.js```
 
 Runs on: http://localhost:10000
 
 bash
-```cd frontend``` <br>
+
+```cd whiteboard-frontend``` <br>
 ```npm install``` <br>
 ```npm install react react-dom socket.io-client``` <br>
 ```npm install -D vite @vitejs/plugin-react``` <br>
@@ -106,12 +108,14 @@ Update Socket.IO connection URL in WhiteboardApp.jsx if necessary:
 # Running the Full Application
 ## Terminal 1: Backend
 bash
-```cd backend``` <br>
+
+```cd whiteboard-backend``` <br>
 ```node index.js```
 
-##Terminal 2: Frontend
+## Terminal 2: Frontend
 bash
-```cd frontend``` <br>
+
+```cd whiteboard-frontend``` <br>
 ```npm run dev```
 
 Open your browser at: http://localhost:5173
