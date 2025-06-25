@@ -8,9 +8,9 @@ const app = express();
 // Add CORS configuration
 app.use(cors({
   origin: [
-    'https://collaborative-whiteboard-murex.vercel.app', // No trailing slash
-    'http://localhost:3000',
-    'http://localhost:5173'
+    'https://collaborative-whiteboard-murex.vercel.app', // Replace with your actual Vercel URL
+    'http://localhost:3000', // For local development
+    'http://localhost:5173'  // For Vite dev server
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -22,7 +22,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      'https://collaborative-whiteboard-murex.vercel.app', // No trailing slash
+      'https://collaborative-whiteboard-murex.vercel.app', // Replace with your actual Vercel URL
       'http://localhost:3000',
       'http://localhost:5173'
     ],
@@ -42,7 +42,6 @@ io.on('connection', (socket) => {
     const { username } = data;
     userSessions.set(socket.id, { username, currentRoom: null });
     socket.emit('registration-success', { username });
-    console.log(`User registered: ${username} (${socket.id})`);
   });
 
   // Get public rooms list
@@ -57,7 +56,6 @@ io.on('connection', (socket) => {
       }));
     
     socket.emit('rooms-list', publicRooms);
-    console.log(`Sent rooms list to ${socket.id}:`, publicRooms.length, 'rooms');
   });
 
   // Create room
@@ -166,6 +164,38 @@ io.on('connection', (socket) => {
     console.log(`${user.username} joined room: ${room.name}`);
   });
 
+  // Change user permission (owner only)
+  socket.on('change-permission', (data) => {
+    const { targetUserId, newPermission } = data;
+    const user = userSessions.get(socket.id);
+    const room = user ? rooms.get(user.currentRoom) : null;
+
+    if (!room || room.owner !== socket.id) {
+      socket.emit('error', { message: 'Only room owner can change permissions' });
+      return;
+    }
+
+    const targetUser = room.users.get(targetUserId);
+    if (!targetUser) {
+      socket.emit('error', { message: 'User not found in room' });
+      return;
+    }
+
+    targetUser.permission = newPermission;
+    
+    // Notify the target user
+    io.to(targetUserId).emit('permission-changed', {
+      newPermission,
+      changedBy: user.username
+    });
+
+    // Notify room owner
+    socket.emit('permission-change-success', {
+      targetUsername: targetUser.username,
+      newPermission
+    });
+  });
+
   // Canvas operations with permission checks
   socket.on('add-object', (data) => {
     const user = userSessions.get(socket.id);
@@ -261,6 +291,26 @@ io.on('connection', (socket) => {
 
     room.canvasState = [];
     socket.to(user.currentRoom).emit('clear-canvas');
+  });
+
+  // Get room users (for owner to manage permissions)
+  socket.on('get-room-users', () => {
+    const user = userSessions.get(socket.id);
+    const room = user ? rooms.get(user.currentRoom) : null;
+
+    if (!room || room.owner !== socket.id) {
+      socket.emit('error', { message: 'Only room owner can view user list' });
+      return;
+    }
+
+    const users = Array.from(room.users.entries()).map(([socketId, userData]) => ({
+      socketId,
+      username: userData.username,
+      permission: userData.permission,
+      isOwner: userData.isOwner
+    }));
+
+    socket.emit('room-users', users);
   });
 
   socket.on('disconnect', () => {
